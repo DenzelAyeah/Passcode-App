@@ -9,72 +9,245 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \Item.timestamp, ascending: true)],
-        animation: .default)
-    private var items: FetchedResults<Item>
-
     var body: some View {
-        List {
-            ForEach(items) { item in
-                Text("Item at \(item.timestamp!, formatter: itemFormatter)")
-            }
-            .onDelete(perform: deleteItems)
-        }
-        .toolbar {
-            #if os(iOS)
-            EditButton()
-            #endif
-
-            Button(action: addItem) {
-                Label("Add Item", systemImage: "plus")
-            }
+        
+        NavigationView{
+            
+            Home()
         }
     }
+}
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(context: viewContext)
-            newItem.timestamp = Date()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    }
+}
 
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+struct Home : View {
+    
+    @State var unLocked = false
+    
+    var body: some View{
+        
+        ZStack{
+            
+            // Lockscreen...
+            
+            if unLocked{
+                
+                Text("App Unlocked")
+                    .font(.title2)
+                    .fontWeight(.heavy)
+            }
+            else{
+                
+                LockScreen(unLocked: $unLocked)
             }
         }
+        .preferredColorScheme(unLocked ? .light : .dark)
     }
+}
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            offsets.map { items[$0] }.forEach(viewContext.delete)
+struct LockScreen : View {
+    
+    @State var password = ""
+    // you can change it when user clicks reset password....
+    // AppStorage => UserDefaults....
+    @AppStorage("lock_Password") var key = "2222"
+    @Binding var unLocked : Bool
+    @State var wrongPassword = false
+    let height = UIScreen.main.bounds.width
+    
+    var body: some View{
+        
+        VStack{
+            
+            HStack{
+                
+                Spacer(minLength: 0)
+                
+                Menu(content: {
+                    
+                    Label(
+                        title: { Text("Help") },
+                        icon: { Image(systemName: "info.circle.fill") })
+                        .onTapGesture(perform: {
+                            // perform actions...
+                        })
+                    
+                    Label(
+                        title: { Text("Reset Password") },
+                        icon: { Image(systemName: "key.fill") })
+                        .onTapGesture(perform: {
+                            
+                        })
+                    
+                }) {
+                    
+                    Image("menu")
+                        .renderingMode(.template)
+                        .resizable()
+                        .frame(width: 19, height: 19)
+                        .foregroundColor(.white)
+                        .padding()
+                }
+            }
+            .padding(.leading)
+            
+            Image("")
+                .resizable()
+                .frame(width: 95, height: 95)
+                .padding(.top,20)
+            
+            Text("Enter Pin to Unlock")
+                .font(.title2)
+                .fontWeight(.heavy)
+                .padding(.top,20)
+            
+            HStack(spacing: 22){
+                
+                // Password Circle View...
+                
+                ForEach(0..<4,id: \.self){index in
+                    
+                    PasswordView(index: index, password: $password)
+                }
+            }
+            // for smaller size iphones...
+            .padding(.top,height < 750 ? 20 : 30)
+            
+            // KeyPad....
+            
+            Spacer(minLength: 0)
+            
+            Text(wrongPassword ? "Incorrect Pin" : "")
+                .foregroundColor(.red)
+                .fontWeight(.heavy)
+            
+            Spacer(minLength: 0)
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3),spacing: height < 750 ? 5 : 15){
+                
+                // Password Button ....
+                
+                ForEach(1...9,id: \.self){value in
+                    
+                    PasswordButton(value: "\(value)",password: $password, key: $key, unlocked: $unLocked, wrongPass: $wrongPassword)
+                }
+                
+                PasswordButton(value: "delete.fill",password: $password, key: $key, unlocked: $unLocked, wrongPass: $wrongPassword)
+                
+                PasswordButton(value: "0", password: $password, key: $key, unlocked: $unLocked, wrongPass: $wrongPassword)
+            }
+            .padding(.bottom)
 
-            do {
-                try viewContext.save()
-            } catch {
-                // Replace this implementation with code to handle the error appropriately.
-                // fatalError() causes the application to generate a crash log and terminate. You should not use this function in a shipping application, although it may be useful during development.
-                let nsError = error as NSError
-                fatalError("Unresolved error \(nsError), \(nsError.userInfo)")
+        }
+        .navigationTitle("")
+        .navigationBarHidden(true)
+    }
+}
+
+struct PasswordView : View {
+    
+    var index : Int
+    @Binding var password : String
+    
+    var body: some View{
+        
+        ZStack{
+            
+            Circle()
+                .stroke(Color.white,lineWidth: 2)
+                .frame(width: 30, height: 30)
+            
+            // checking whether it is typed...
+            
+            if password.count > index{
+                
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 30, height: 30)
             }
         }
     }
 }
 
-private let itemFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateStyle = .short
-    formatter.timeStyle = .medium
-    return formatter
-}()
+struct PasswordButton : View {
+    
+    var value : String
+    @Binding var password : String
+    @Binding var key : String
+    @Binding var unlocked : Bool
+    @Binding var wrongPass : Bool
+    
+    var body: some View{
+        
+        Button(action: setPassword, label: {
+            
+            VStack{
+                
+                if value.count > 1{
+                    
+                    // Image...
+                    
+                    Image(systemName: "delete.left")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                }
+                else{
+                    
+                    Text(value)
+                        .font(.title)
+                        .foregroundColor(.white)
+                }
+            }
+            .padding()
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+        })
+    }
+    
+    func setPassword(){
+        
+        // checking if backspace pressed...
+        
+        withAnimation{
+            
+            if value.count > 1{
+                
+                if password.count != 0{
+                    
+                    password.removeLast()
+                }
+            }
+            else{
+                
+                if password.count != 4{
+                    
+                    password.append(value)
+                    
+                    // Delay Animation...
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        
+                        withAnimation{
+                            
+                            if password.count == 4{
+                                
+                                if password == key{
+                                    
+                                    unlocked = true
+                                }
+                                else{
+                                    
+                                    wrongPass = true
+                                    password.removeAll()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
